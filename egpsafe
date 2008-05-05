@@ -1,0 +1,309 @@
+#!/bin/bash
+#
+# Written by Ben Reser <ben@reser.org>
+# Shell script to decrypt a file to a temp file.  Edit it.
+# Re-encrypt the file and then wipe the temp file from the drive.
+# requires gpg and wipe.
+# * added secure way of generating a tmp file. -- erik@code.de
+# * added handling of an alternate place for gpg and password file
+#   for usb memory stick handling -- erik@code.de
+# * added darwin support -- erik@code.de
+# * added encryption for one or more recipients -- erik@code.de
+#
+# END OF CHANGELOG
+
+PROGRAM=`basename "$0"`
+VERSION="%%VERSION%%"
+DEBUG=${DEBUG:=0}
+
+# Shorten PATH to standard pathes for invoking user. This is for security.
+PATH="/bin:/usr/bin"
+
+# specify recipients who are able to decrypt your password file This is useful
+# for people with a private gpg key and different gpg key for business.
+# The recipient key must already imported in used keychain. Do not enter a
+# key with spaces. They are currently not supported.
+RECIPIENT_KEY_ID=0x720DF241
+
+# password base filename it gets the .gpg extension on encryption
+PASSWORD_FILE=".passwords"
+
+# specify the point where the usb stick is mounted
+MOUNTPOINT=/media/sda1
+# specify path to encrypted password file (relative to MOUNTPOINT) so: no
+# leading /
+USB_PASSWORD_DIR=""
+# If USB memory device is mounted, it uses gpg key on that device
+USB_GNUPG_DIR=".gnupg/"
+ 
+## Merge variables
+# remote path to password file
+# ssh://host/
+# ssh://host//home/user
+UNISON_REMOTE_DIR="/home/user"
+UNISON_LOCAL_DIR="/Users/user"
+
+## Global vars
+# check for OS and their defaults
+_uname=`uname`
+case "$_uname" in
+	Linux*)
+		PASSWORD_DIR=${HOME}
+		TMPFILE=`mktemp -p ${TMPDIR:-/tmp} ${PROGRAM}.XXXXXXXX`
+		PATH=/bin:/usr/bin
+		MERGE_BIN="meld"
+		;;
+	Darwin*)
+		PASSWORD_DIR=${HOME}
+		TMPFILE=`mktemp -t ${PROGRAM}.XXXXXXXX`
+		# added path to common package installations and macports 
+		PATH=${PATH}:/usr/local/bin:/opt/local/bin
+		MERGE_BIN="opendiff"
+		;;
+		;;
+        *)
+		# If you discover new shells that can't handle dev tty etc. as
+		# below, then tailor it here.
+		echo Platform not supported >&2
+		exit 1
+		;;
+esac
+
+EDITOR=${EDITOR:=vi}
+PAGER=${PAGER:=view}
+GPGFILE_EXTENSION=${GPGFILE_EXTENSION:-.gpg}
+GPGFILE=${PASSWORD_DIR}/${PASSWORD_FILE}${GPGFILE_EXTENSION}
+UNISON_CMD_OPTIONS=" -ui text -times"
+UNISON_PROFILE_NAME=${PROGRAM}.prf
+
+## Functions
+usage ()
+{
+	cat <<EOFUSAGE
+Usage: $PROGRAM [-hVv] edit|see|search|merge
+
+DESCRIPTION
+	stores your passwords in a gpg encrypted file.
+
+OPTIONS
+	-h this information
+	-V prints version end exits
+	-v enable verbose output
+
+MODES
+	edit
+		Add or chage passwords in file (default: $EDITOR)
+	see
+		Read-only access to password file (default: $PAGER)
+	search
+		Search for pattern in file
+	merge
+		Merge to a hup/spoke using unison
+
+EXITCODES
+        1 error in options
+        2 can not decrypt file
+        3 can not encrypt file
+BUGS
+Send bug reports to Erik Wenzel <ew@code.de>
+EOFUSAGE
+}
+
+# function:    echos a error message to /dev/stderr
+# parameter:   $@ = additional information
+msgError ()
+{
+	echo $PROGRAM: "$@" >&2
+}
+
+# function:   for echoing a message on a non zero exit status of a process 
+#             to stderr. Exit code are 1 >= 255.
+# parameters: $1 = process name, $2 = exit status number
+msgOnFailedExitStatus ()
+{
+	if [ $2 -ge "1" -a $2 -le "255" ]
+	then
+		echo "Process $1 return exit status $2. Exiting..." >&2
+		exit $2
+	fi
+}
+
+# function:   echos a debugging string to stderr if debug flag is enabled
+# parameters: $1 = value of debugging flag, $* = debugging string
+msgDebug ()
+{
+	debugString="$*"
+	# "${debugString#* }" removes first argument, which is the debug level.
+	[ $1 -ge "1" ] && echo "DEBUG${1}: ${debugString#* }" >&2
+}
+
+msgVerbose ()
+{
+        echooption=""
+        if [ "X$1" = "X-n" ]
+        then
+                echooption="-n"
+                shift
+        fi
+        if [ "X$option_verbose" = "Xyes" ]
+        then
+                msgDebug 9 echo option: $echooption everything else: "$*"
+                echo $echooption "$*"
+        else
+                msgDebug 9 verbose option not enabled
+        fi
+}
+
+#function:    echos a error message on verbose flag
+#parameters:  $* additional information
+msgVerboseError ()
+{
+	if [ "X$option_verbose" = "Xyes" ]
+	then
+		msgError "$*"
+	fi
+}
+
+# Arg: $1= filename
+gpg_decrypt ()
+{
+	gpg --homedir ${HOMEDIR} --yes --output $TMPFILE --decrypt $1
+}
+
+# Arg: $1= filename
+gpg_encrypt ()
+{
+	if [ "x$RECIPIENT_KEY_ID" = "x" ]
+	then
+		RECIPIENTS_OPTS=" --default-recipient-self "
+	else
+		# get default recipient on currently used keyring
+		RECIPIENTS_OPTS="-r 0x`gpg --list-key | head -n6 | grep "^pub" | cut -d" " -f4 | cut -d/ -f2`"
+		RECIPIENTS_OPTS="${RECIPIENTS_OPTS} -r $RECIPIENT_KEY_ID"
+	fi
+	gpg --homedir ${HOMEDIR} --yes --trust-model always \
+		--output $1 $RECIPIENTS_OPTS --encrypt $TMPFILE
+}
+
+check_usb_device ()
+{
+	# check if usb memory is mounted. Then use gpg key on usb device.
+	if [ -d ${MOUNTPOINT} ]
+	then
+		PASSWORD_DIR=${MOUNTPOINT}/${USB_PASSWORD_DIR}
+		HOMEDIR=${MOUNTPOINT}/${USB_GNUPG_DIR}
+	else
+		# go with standard installation
+		PASSWORD_DIR=$HOME
+		HOMEDIR=${HOME}/.gnupg
+	fi
+}
+
+create_unison_profile ()
+{
+cat >> ${HOME}/.unison/$UNISON_PROFILE_NAME <<EOF 
+## Autocreated by ${PROGRAM}-$VERSION
+root = $UNISON_REMOTE_DIR
+root = $UNISON_LOCAL_DIR
+
+path = $GPGFILE
+
+merge = Name * -> $MERGE_BIN CURRENT1 CURRENT2
+EOF
+}
+
+cleanup ()
+{
+	if `which wipe`
+	then
+		wipe -f -s $TMPFILE
+	else
+		rm -f $TMPFILE
+		msgVerbose "TMPFILE only removed -- NOT secure! Install: wipe"
+	fi
+}
+
+#
+## MAIN
+#
+SEARCH_PATTERN=""
+
+# use bash builtin getopts
+while getopts DVvh name
+do
+        case $name in
+                D) DEBUG=1
+		;;
+                h) usage
+                   exit 0
+		;;
+                V) echo $VERSION
+                   exit 0
+		;;
+                v) option_verbose="yes"
+		;;
+                ?) usage
+                   exit 1
+		;;
+        esac
+done
+
+#shift $(($OPTIND - 1))
+# SunOS 5.8 /bin/sh doesn't know $(()) and $() expressions. See "C1" in FAQ.gz
+#  from bash package for a complete list of differences between sh and bash.
+shift `expr $OPTIND - 1`
+
+#
+# Now process all values of $0
+case $0 in
+	edit)
+		# Default mode
+		:
+	;;
+	see)
+		EDITOR=$PAGER
+	;;
+	merge)
+		if [ ! -d ${HOME}/.unison ]
+		then
+			mkdir ${HOME}/.unison
+		fi
+		if [ ! -f ${HOME}/.unison/$UNISON_PROFILE_NAME ]
+		then
+			create_unison_profile
+		fi
+		unison $UNISON_CMD_OPTIONS $UNISON_PROFILE_NAME
+	;;
+	search)
+		if [ "X" != "X$*" ]
+		then
+			# all characters following "search " are pattern
+			SEARCH_PATTERN="$*"
+		fi
+	;;
+esac
+
+if gpg_decrypt $GPGFILE
+then
+	if [ "X$SEARCH_PATTERN" != "X" ]
+	then
+		$EDITOR +/"$SEARCH_PATTERN" $TMPFILE
+		exit 13
+	fi
+	$EDITOR $TMPFILE
+	if gpg_encrypt $GPGFILE
+	then
+		cleanup
+	else
+		echo -ne \007
+		msgError "Warning could not re-encrypt $TMPFILE";
+		exit 3
+	fi
+else
+	msgError "Couldn't decrypt $GPGFILE"
+	exit 2
+fi
+
+trap 'cleanup; exit 13' 1 2 3 15
+exit 0
+
