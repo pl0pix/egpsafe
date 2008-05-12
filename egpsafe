@@ -253,6 +253,12 @@ done
 #  from bash package for a complete list of differences between sh and bash.
 shift `expr $OPTIND - 1`
 
+if [ ! -f $GPGFILE ]
+then
+	touch ${PASSWORD_DIR}${PASSWORD_FILE}
+	gpg_encrypt $PASSWORD_FILE && msgVerbose Created $GPGFILE
+fi
+
 #
 # Now process all values of $0
 case $0 in
