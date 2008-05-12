@@ -169,7 +169,7 @@ gpg_decrypt ()
 	gpg --homedir ${HOMEDIR} --yes --output $TMPFILE --decrypt $1
 }
 
-# Arg: $1= filename
+# Arg: $1= output filename $2 input tmpfile (optional)
 gpg_encrypt ()
 {
 	if [ "x$RECIPIENT_KEY_ID" = "x" ]
@@ -180,8 +180,13 @@ gpg_encrypt ()
 		RECIPIENTS_OPTS="-r 0x`gpg --list-key | head -n6 | grep "^pub" | cut -d" " -f4 | cut -d/ -f2`"
 		RECIPIENTS_OPTS="${RECIPIENTS_OPTS} -r $RECIPIENT_KEY_ID"
 	fi
-	gpg --homedir ${HOMEDIR} --yes --trust-model always \
-		--output $1 $RECIPIENTS_OPTS --encrypt $TMPFILE
+	if [  x$2 = "x" ]
+	then
+		gpg --homedir ${HOMEDIR} --yes --trust-model always $RECIPIENTS_OPTS --encrypt $1
+	else
+		gpg --homedir ${HOMEDIR} --yes --trust-model always --output $1 \
+		$RECIPIENTS_OPTS --encrypt $2
+	fi
 }
 
 check_usb_device ()
@@ -296,7 +301,7 @@ then
 		exit 13
 	fi
 	$EDITOR $TMPFILE
-	if gpg_encrypt $GPGFILE
+	if gpg_encrypt $GPGFILE $TMPFILE
 	then
 		cleanup
 	else
