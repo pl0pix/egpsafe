@@ -257,6 +257,8 @@ done
 #  from bash package for a complete list of differences between sh and bash.
 shift `expr $OPTIND - 1`
 
+check_usb_device
+
 if [ ! -f $GPGFILE ]
 then
 	touch ${PASSWORD_DIR}${PASSWORD_FILE}
