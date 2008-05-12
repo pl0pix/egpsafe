@@ -60,7 +60,6 @@ case "$_uname" in
 		PATH=${PATH}:/usr/local/bin:/opt/local/bin
 		MERGE_BIN="opendiff"
 		;;
-		;;
         *)
 		# If you discover new shells that can't handle dev tty etc. as
 		# below, then tailor it here.
