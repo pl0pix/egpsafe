@@ -261,8 +261,8 @@ check_usb_device
 
 if [ ! -f $GPGFILE ]
 then
-	touch ${PASSWORD_DIR}${PASSWORD_FILE}
-	gpg_encrypt $PASSWORD_FILE && msgVerbose Created $GPGFILE
+	touch ${PASSWORD_DIR}/${PASSWORD_FILE}
+	gpg_encrypt ${PASSWORD_DIR}/$PASSWORD_FILE && msgVerbose Created $GPGFILE
 fi
 
 #
