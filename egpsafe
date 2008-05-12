@@ -133,7 +133,7 @@ msgDebug ()
 {
 	debugString="$*"
 	# "${debugString#* }" removes first argument, which is the debug level.
-	[ $1 -ge "1" ] && echo "DEBUG${1}: ${debugString#* }" >&2
+	[ $1 -le $DEBUG ] && echo "DEBUG${1}: ${debugString#* }" >&2
 }
 
 msgVerbose ()
