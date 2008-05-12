@@ -90,8 +90,8 @@ OPTIONS
 	-v enable verbose output
 
 MODES
-	edit
-		Add or chage passwords in file (default: $EDITOR)
+	edit (default mode)
+		Add or change passwords in file (default: $EDITOR)
 	see
 		Read-only access to password file (default: $PAGER)
 	search
