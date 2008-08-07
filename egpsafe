@@ -265,6 +265,11 @@ then
 	gpg_encrypt ${PASSWORD_DIR}/$PASSWORD_FILE && msgVerbose Created $GPGFILE
 fi
 
+if [ ! -f $GPGFILE ]
+then
+	touch $GPGFILE
+	gpg_encrypt $GPGFILE && msgVerbose $GPGFILE created.
+if
 #
 # Now process all values of $0
 case $0 in
