@@ -1,4 +1,5 @@
 #!/bin/bash
+#set -x
 #
 # Written by Ben Reser <ben@reser.org>
 # Shell script to decrypt a file to a temp file.  Edit it.
@@ -37,11 +38,10 @@ USB_PASSWORD_DIR=""
 USB_GNUPG_DIR=".gnupg/"
  
 ## Merge variables
-# remote path to password file
-# ssh://host/
-# ssh://host//home/user
-UNISON_REMOTE_DIR="/home/user"
-UNISON_LOCAL_DIR="/Users/user"
+# remote (hup) path to password file
+# check scp(1) man page for URL syntax
+SCP_OPTIONS="-Bqp"
+HUP_PASSWORD_FILE="10.9.9.2:/home/erik/.password.gpg"
 
 ## Global vars
 # check for OS and their defaults
@@ -49,13 +49,11 @@ _uname=`uname`
 case "$_uname" in
 	Linux*)
 		PASSWORD_DIR=${HOME}
-		TMPFILE=`mktemp -p ${TMPDIR:-/tmp} ${PROGRAM}.XXXXXXXX`
 		PATH=/bin:/usr/bin
 		MERGE_BIN="meld"
 		;;
 	Darwin*)
 		PASSWORD_DIR=${HOME}
-		TMPFILE=`mktemp -t ${PROGRAM}.XXXXXXXX`
 		# added path to common package installations and macports 
 		PATH=${PATH}:/usr/local/bin:/opt/local/bin
 		MERGE_BIN="opendiff"
@@ -72,10 +70,9 @@ EDITOR=${EDITOR:=vi}
 PAGER=${PAGER:=view}
 GPGFILE_EXTENSION=${GPGFILE_EXTENSION:-.gpg}
 GPGFILE=${PASSWORD_DIR}/${PASSWORD_FILE}${GPGFILE_EXTENSION}
-UNISON_CMD_OPTIONS=" -ui text -times"
-UNISON_PROFILE_NAME=${PROGRAM}.prf
 
 ## Functions
+
 usage ()
 {
 	cat <<EOFUSAGE
@@ -88,6 +85,7 @@ OPTIONS
 	-h this information
 	-V prints version end exits
 	-v enable verbose output
+        -D enable debug mode
 
 MODES
 	edit (default mode)
@@ -97,12 +95,13 @@ MODES
 	search
 		Search for pattern in file
 	merge
-		Merge to a hup/spoke using unison
+		Merge to a hup/spoke using scp
 
 EXITCODES
         1 error in options
         2 can not decrypt file
         3 can not encrypt file
+
 BUGS
 Send bug reports to Erik Wenzel <ew@code.de>
 EOFUSAGE
@@ -163,22 +162,55 @@ msgVerboseError ()
 	fi
 }
 
-# Arg: $1= filename
-gpg_decrypt ()
+#function     os independent mktemp creation
+#
+_mktemp ()
 {
-	gpg --homedir ${HOMEDIR} --yes --output $TMPFILE --decrypt $1
+	_uname=`uname`
+	local $TEMPFILE
+	case "$_uname" in
+	Linux*)
+		TEMPFILE=`mktemp -p ${TMPDIR:-/tmp} ${PROGRAM}.XXXXXXXX`
+		;;
+	Darwin*)
+		TEMPFILE=`mktemp -t ${PROGRAM}.XXXXXXXX`
+		;;
+	*)
+		# If you discover new shells that can't handle dev tty etc. as
+		# below, then tailor it here.
+		echo Platform not supported >&2
+		exit 1
+		;;
+	esac
+	msgDebug 1 TEMPFILE: $TEMPFILE
+	echo $TEMPFILE
 }
 
-# Arg: $1= output filename $2 input tmpfile (optional)
+# Arg: $1 = filename $2 = output $TMPFILE
+gpg_decrypt ()
+{
+	# if optional $2 is an other file then $TMPFILE
+	if [ X$2 != "X" ]
+	then
+		TMPFILE=$2
+	fi
+	msgDebug 1 writing cleartext file to: $TMPFILE
+	# last option _must_ be --decrypt. do not reorder options
+	gpg --homedir ${HOMEDIR} --yes --output "$TMPFILE" --decrypt $1
+}
+
+# Arg: $1 = output filename $2 input tmpfile (optional)
 gpg_encrypt ()
 {
 	if [ "x$RECIPIENT_KEY_ID" = "x" ]
 	then
 		RECIPIENTS_OPTS=" --default-recipient-self "
+		msgDebug 1 No receipient key found, encrypting to my self only
 	else
 		# get default recipient on currently used keyring
 		RECIPIENTS_OPTS="-r 0x`gpg --list-key | head -n6 | grep "^pub" | cut -d" " -f4 | cut -d/ -f2`"
 		RECIPIENTS_OPTS="${RECIPIENTS_OPTS} -r $RECIPIENT_KEY_ID"
+		msgDebug 1 Found recipient key
 	fi
 	if [  x$2 = "x" ]
 	then
@@ -194,35 +226,52 @@ check_usb_device ()
 	# check if usb memory is mounted. Then use gpg key on usb device.
 	if [ -d ${MOUNTPOINT} ]
 	then
+		msgDebug 1 Found a mounted USB Memory Stick
 		PASSWORD_DIR=${MOUNTPOINT}/${USB_PASSWORD_DIR}
 		HOMEDIR=${MOUNTPOINT}/${USB_GNUPG_DIR}
 	else
 		# go with standard installation
+		msgDebug 1 No USB device found\; Using default gpg key
 		PASSWORD_DIR=$HOME
 		HOMEDIR=${HOME}/.gnupg
 	fi
 }
 
-create_unison_profile ()
+# no arguments returns the path to encrypted password file
+copy_from_hup ()
 {
-cat >> ${HOME}/.unison/$UNISON_PROFILE_NAME <<EOF 
-## Autocreated by ${PROGRAM}-$VERSION
-root = $UNISON_REMOTE_DIR
-root = $UNISON_LOCAL_DIR
-
-path = $GPGFILE
-
-merge = Name * -> $MERGE_BIN CURRENT1 CURRENT2
-EOF
+	HUP_TEMPFILE=`_mktemp`
+	scp $SCP_OPTIONS $HUP_PASSWORD_FILE $HUP_TEMPFILE
+	if [ $? = 0 ]
+	then
+		echo $HUP_TEMPFILE
+	fi
 }
+
+# Arg: $1 = encrypted local file to be copied to hup
+copy_to_hup ()
+{
+	scp $SCP_OPTIONS $1 $HUP_PASSWORD_FILE
+	msgOnFailedExitStatus File $1 can not be copied to hup.
+	return 1
+}
+
 
 cleanup ()
 {
 	if `which wipe`
 	then
-		wipe -f -s $TMPFILE
+		wipe -f -s $TMPFILE 
+		if [ -f $HUP_TEMPFILE ]
+		then
+			wipe -f -s $HUP_TEMPFILE
+		fi
 	else
 		rm -f $TMPFILE
+		if [ -f $HUP_TEMPFILE ] 
+		then 
+			rm -f $HUP_TEMPFILE
+		fi
 		msgVerbose "TMPFILE only removed -- NOT secure! Install: wipe"
 	fi
 }
@@ -230,6 +279,7 @@ cleanup ()
 #
 ## MAIN
 #
+TMPFILE=`_mktemp`
 SEARCH_PATTERN=""
 
 # use bash builtin getopts
@@ -259,20 +309,24 @@ shift `expr $OPTIND - 1`
 
 check_usb_device
 
-if [ ! -f $GPGFILE ]
-then
-	touch ${PASSWORD_DIR}/${PASSWORD_FILE}
-	gpg_encrypt ${PASSWORD_DIR}/$PASSWORD_FILE && msgVerbose Created $GPGFILE
-fi
-
+# Initializing files on the first run
+msgDebug 1 Using GPGFILE: $GPGFILE
 if [ ! -f $GPGFILE ]
 then
 	touch $GPGFILE
-	gpg_encrypt $GPGFILE && msgVerbose $GPGFILE created.
-if
+	TMP_CLEARTEXT_FILE=`_mktemp`
+	msgVerbose Created candidate cleartext password file. Save it and it will be encrypted.
+	$EDITOR $TMP_CLEARTEXT_FILE
+	gpg_encrypt $TMP_CLEARTEXT_FILE && msgVerbose $GPGFILE created.
+	msgDebug 1 No encrypted file found: Created $GPGFILE
+	rm -f $TMP_CLEARTEXT_FILE
+fi
+
+msgDebug 1 \$1 has value: $1
+msgDebug 1 \$* has value: $*
 #
 # Now process all values of $0
-case $0 in
+case $1 in
 	edit)
 		# Default mode
 		:
@@ -281,15 +335,87 @@ case $0 in
 		EDITOR=$PAGER
 	;;
 	merge)
-		if [ ! -d ${HOME}/.unison ]
+		set -x
+		TMP_HUP_DECRYPT_FILE=`_mktemp`
+		# copy_from_hup returns path to hup_tempfile
+		HUP_GPGFILE=`copy_from_hup`
+		# compare ctimes of both files. The new one is printed first
+		# 
+		newer_file=`ls -tc $HUP_GPGFILE $GPGFILE | head -1`
+		if [ $newer_file = $HUP_GPGFILE ]
 		then
-			mkdir ${HOME}/.unison
+			:
+			msgVerbose Password file on Remote Host is newer
+		else
+			:
+			msgVerbose Password file on local Host is newer
 		fi
-		if [ ! -f ${HOME}/.unison/$UNISON_PROFILE_NAME ]
+		# if not empty
+		if [ X$HUP_GPGFILE != "X" ]
 		then
-			create_unison_profile
+			if gpg_decrypt $HUP_GPGFILE $TMP_HUP_DECRYPT_FILE
+			then
+				read -p 'Hup file is left, local file is right. ok?[Y/n]' REPLY
+				if [ $REPLY = 'n' -o $REPLY = 'N' ]
+				then
+					msgDebug 1 Exit merge mode 
+					break
+				fi
+				### FIXME merge tool doesn't start
+				$MERGE_BIN $TMP_HUP_DECRYPT_FILE `gpg_decrypt $GPGFILE`
+			fi
 		fi
-		unison $UNISON_CMD_OPTIONS $UNISON_PROFILE_NAME
+		# Be careful which file was written
+		newer_file=`ls -tc $TMP_HUP_DECRYPT_FILE $TMPFILE`
+		msgVerbose last written file: $newer_file
+		# check for differences after merge
+		if diff -q >/dev/null
+		then
+			# reencrypt and scp file to hup
+			if gpg_encrypt $GPGFILE $TMPFILE
+			then
+				msgDebug 1 Successfully encrypted $GPGFILE
+				copy_to_hup $GPGFILE
+			fi
+		else
+			msgDebug 1 Something went wrong. Try to fix it.
+			echo Merged files still differ.
+			echo ---
+			echo Entering interactive mode to resolve confusion. What to do next:
+			echo '[m]erge again,'
+			echo 'upload [n]ewer file to hup,'
+			echo '[s]ave local file and remove file from hup. Do not copy to hup,'
+			echo '[d]o nothing just continue; everything is fine'
+			read -p'mnosd [m]>' REPLY
+			case $REPLY in
+			n)
+				if [ $newer_file = $HUP_GPGFILE ]
+				then
+					if gpg_encrypt $HUP_GPGFILE $TMP_HUP_DECRYPT_FILE
+					then
+						msgDebug 1 Successfully encrypted $HUP_GPGFILE
+						copy_to_hup $HUP_GPGFILE
+					fi
+				else
+					if gpg_encrypt $GPGFILE $TMPFILE
+					then
+						msgDebug 1 Successfully encrypted $GPGFILE
+						copy_to_hup $GPGFILE
+					fi
+				fi
+			;;
+			d) :
+			;;
+			s)	if gpg_encrypt $GPGFILE $TMPFILE
+				then
+					msgDebug 1 Successfully encrypted $GPGFILE
+					copy_to_hup $GPGFILE
+				fi
+			;;
+			m|*) $MERGE_BIN $TMP_HUP_DECRYPT_FILE `gpg_decrypt $GPGFILE`
+			;;
+			esac
+		fi
 	;;
 	search)
 		if [ "X" != "X$*" ]
@@ -298,18 +424,25 @@ case $0 in
 			SEARCH_PATTERN="$*"
 		fi
 	;;
+	*)
+		msgDebug 1 No Mode specified using default mode: edit
+	;;
 esac
 
+exit 0
 if gpg_decrypt $GPGFILE
 then
+	msgDebug 1 Successfully decrypted $GPGFILE
 	if [ "X$SEARCH_PATTERN" != "X" ]
 	then
 		$EDITOR +/"$SEARCH_PATTERN" $TMPFILE
 		exit 13
 	fi
 	$EDITOR $TMPFILE
+
 	if gpg_encrypt $GPGFILE $TMPFILE
 	then
+		msgDebug 1 Successfully encrypted $GPGFILE
 		cleanup
 	else
 		echo -ne \007
