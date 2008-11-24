@@ -1,5 +1,4 @@
 #!/bin/bash
-#set -x
 #
 # Written by Ben Reser <ben@reser.org>
 # Shell script to decrypt a file to a temp file.  Edit it.
@@ -10,6 +9,7 @@
 #   for usb memory stick handling -- erik@code.de
 # * added darwin support -- erik@code.de
 # * added encryption for one or more recipients -- erik@code.de
+# * added four modes edit, see, search, merge -- erik@code.de
 #
 # END OF CHANGELOG
 
@@ -56,7 +56,10 @@ case "$_uname" in
 		PASSWORD_DIR=${HOME}
 		# added path to common package installations and macports 
 		PATH=${PATH}:/usr/local/bin:/opt/local/bin
-		MERGE_BIN="opendiff"
+		# opendiff doesn't block shell script until it ends. And direct call of FileMerge dosn't
+		# take arguments.
+		#MERGE_BIN="/Developer/Applications/Utilities/FileMerge.app/Contents/MacOS/FileMerge"
+		MERGE_BIN="_opendiff"
 		;;
         *)
 		# If you discover new shells that can't handle dev tty etc. as
@@ -119,7 +122,7 @@ msgError ()
 # parameters: $1 = process name, $2 = exit status number
 msgOnFailedExitStatus ()
 {
-	if [ $2 -ge "1" -a $2 -le "255" ]
+	if [ "$2" -ge 1 -a "$2" -le 255 ]
 	then
 		echo "Process $1 return exit status $2. Exiting..." >&2
 		exit $2
@@ -135,9 +138,12 @@ msgDebug ()
 	[ $1 -le $DEBUG ] && echo "DEBUG${1}: ${debugString#* }" >&2
 }
 
+# function:   it prints a message only when verbose option is set
+#             'msgVerbose -n' suppresses trailing newline
+# parameters: text to print
 msgVerbose ()
 {
-        echooption=""
+        local echooption=""
         if [ "X$1" = "X-n" ]
         then
                 echooption="-n"
@@ -152,8 +158,8 @@ msgVerbose ()
         fi
 }
 
-#function:    echos a error message on verbose flag
-#parameters:  $* additional information
+# function:    echos a error message on verbose flag
+# parameters:  $* additional information
 msgVerboseError ()
 {
 	if [ "X$option_verbose" = "Xyes" ]
@@ -162,12 +168,12 @@ msgVerboseError ()
 	fi
 }
 
-#function     os independent mktemp creation
+# function:     os independent mktemp creation
 #
 _mktemp ()
 {
 	_uname=`uname`
-	local $TEMPFILE
+	local TEMPFILE=""
 	case "$_uname" in
 	Linux*)
 		TEMPFILE=`mktemp -p ${TMPDIR:-/tmp} ${PROGRAM}.XXXXXXXX`
@@ -182,13 +188,23 @@ _mktemp ()
 		exit 1
 		;;
 	esac
-	msgDebug 1 TEMPFILE: $TEMPFILE
+	msgDebug 1 TEMPFILE name returned from '_mktemp()' : $TEMPFILE
 	echo $TEMPFILE
 }
 
+# function: do block opendiff until FileMerge exits
+# Args: arguments to opendiff
+# Returns exit value
+_opendiff () {
+	echo `opendiff "$@"` > /dev/null
+}
+
+# function: gpg decrypts a file in $1
 # Arg: $1 = filename $2 = output $TMPFILE
+# Return value: exit code of last command
 gpg_decrypt ()
 {
+	local TMPFILE=""
 	# if optional $2 is an other file then $TMPFILE
 	if [ X$2 != "X" ]
 	then
@@ -199,6 +215,7 @@ gpg_decrypt ()
 	gpg --homedir ${HOMEDIR} --yes --output "$TMPFILE" --decrypt $1
 }
 
+# function: gpg encrypts a file in $2, when available and writes it in $1
 # Arg: $1 = output filename $2 input tmpfile (optional)
 gpg_encrypt ()
 {
@@ -240,7 +257,7 @@ check_usb_device ()
 # no arguments returns the path to encrypted password file
 copy_from_hup ()
 {
-	HUP_TEMPFILE=`_mktemp`
+	local HUP_TEMPFILE=`_mktemp`
 	scp $SCP_OPTIONS $HUP_PASSWORD_FILE $HUP_TEMPFILE
 	if [ $? = 0 ]
 	then
@@ -251,9 +268,8 @@ copy_from_hup ()
 # Arg: $1 = encrypted local file to be copied to hup
 copy_to_hup ()
 {
-	scp $SCP_OPTIONS $1 $HUP_PASSWORD_FILE
-	msgOnFailedExitStatus File $1 can not be copied to hup.
-	return 1
+	scp $SCP_OPTIONS $1 $HUP_PASSWORD_FILE || msgOnFailedExitStatus
+	return 0
 }
 
 
@@ -335,73 +351,70 @@ case $1 in
 		EDITOR=$PAGER
 	;;
 	merge)
-		set -x
+		SUCCESSFUL_DECRYPT=0
 		TMP_HUP_DECRYPT_FILE=`_mktemp`
+		msgDebug 1 \$TMP_HUP_DECRYPT_FILE = $TMP_HUP_DECRYPT_FILE
 		# copy_from_hup returns path to hup_tempfile
 		HUP_GPGFILE=`copy_from_hup`
-		# compare ctimes of both files. The new one is printed first
-		# 
-		newer_file=`ls -tc $HUP_GPGFILE $GPGFILE | head -1`
-		if [ $newer_file = $HUP_GPGFILE ]
+		msgDebug 1 \$HUP_GPGFILE = $HUP_GPGFILE
+		msgDebug 1 tmp files are created
+		# compare ctimes of both files.
+		if [ $HUP_GPGFILE -nt $GPGFILE ]
 		then
-			:
-			msgVerbose Password file on Remote Host is newer
+			MERGEFILE=$TMPFILE
+			msgVerbose 'Password file on Remote Host is newer'
+			echo merged changes are written to file on localhost
 		else
-			:
-			msgVerbose Password file on local Host is newer
+			MERGEFILE=$TMP_HUP_DECRYPT_FILE
+			msgVerbose 'Password file on local Host is newer'
+			echo merged changes are written to file on hup
 		fi
 		# if not empty
 		if [ X$HUP_GPGFILE != "X" ]
 		then
-			if gpg_decrypt $HUP_GPGFILE $TMP_HUP_DECRYPT_FILE
+			gpg_decrypt $HUP_GPGFILE $TMP_HUP_DECRYPT_FILE && SUCCESSFUL_DECRYPT=$((SUCCESSFUL_DECRYPT + 1))
+			gpg_decrypt $GPGFILE $TMPFILE && SUCCESSFUL_DECRYPT=$((SUCCESSFUL_DECRYPT + 1))
+			if [ $SUCCESSFUL_DECRYPT -eq 2 ]
 			then
+				msgDebug 1 \$GPGFILE = $GPGFILE
+				msgDebug 1 \$HUP_GPGFILE = $HUP_GPGFILE
+				msgDebug 1 \$TMP_HUP_DECRYPT_FILE = $TMP_HUP_DECRYPT_FILE
+				msgDebug 1 \$TMPFILE = $TMPFILE
 				read -p 'Hup file is left, local file is right. ok?[Y/n]' REPLY
-				if [ $REPLY = 'n' -o $REPLY = 'N' ]
+				if [ "$REPLY" = 'n' ] || [ "$REPLY" = 'N' ]
 				then
 					msgDebug 1 Exit merge mode 
-					break
+					exit 0
 				fi
-				### FIXME merge tool doesn't start
-				$MERGE_BIN $TMP_HUP_DECRYPT_FILE `gpg_decrypt $GPGFILE`
+				$MERGE_BIN $TMP_HUP_DECRYPT_FILE $TMPFILE -merge $MERGEFILE
+			else
+				msgDebug 1 \$SUCCESSFUL_DECRYPT = $SUCCESSFUL_DECRYPT
+				exit 2
 			fi
 		fi
-		# Be careful which file was written
-		newer_file=`ls -tc $TMP_HUP_DECRYPT_FILE $TMPFILE`
-		msgVerbose last written file: $newer_file
 		# check for differences after merge
-		if diff -q >/dev/null
-		then
-			# reencrypt and scp file to hup
-			if gpg_encrypt $GPGFILE $TMPFILE
-			then
-				msgDebug 1 Successfully encrypted $GPGFILE
-				copy_to_hup $GPGFILE
-			fi
-		else
+		until ( diff -q $TMP_HUP_DECRYPT_FILE $TMPFILE > /dev/null )
+		do
 			msgDebug 1 Something went wrong. Try to fix it.
 			echo Merged files still differ.
 			echo ---
 			echo Entering interactive mode to resolve confusion. What to do next:
 			echo '[m]erge again,'
+			echo '[l]ist both files,'
+			echo '[c]hange file to write to,'
 			echo 'upload [n]ewer file to hup,'
 			echo '[s]ave local file and remove file from hup. Do not copy to hup,'
 			echo '[d]o nothing just continue; everything is fine'
+			echo '[q] do nothing and quit application'
 			read -p'mnosd [m]>' REPLY
 			case $REPLY in
-			n)
-				if [ $newer_file = $HUP_GPGFILE ]
+			l)	ls -l $TMP_HUP_DECRYPT_FILE $TMPFILE ;;
+			c)	if [ "$MERGEFILE" = "$TMP_HUP_DECRYPT_FILE" ]
 				then
-					if gpg_encrypt $HUP_GPGFILE $TMP_HUP_DECRYPT_FILE
-					then
-						msgDebug 1 Successfully encrypted $HUP_GPGFILE
-						copy_to_hup $HUP_GPGFILE
-					fi
+					MERGEFILE=$TMPFILE
+					echo Changes from merge are written to file on localhost
 				else
-					if gpg_encrypt $GPGFILE $TMPFILE
-					then
-						msgDebug 1 Successfully encrypted $GPGFILE
-						copy_to_hup $GPGFILE
-					fi
+					echo Changes from merge are written to file that goes to hup
 				fi
 			;;
 			d) :
@@ -409,13 +422,33 @@ case $1 in
 			s)	if gpg_encrypt $GPGFILE $TMPFILE
 				then
 					msgDebug 1 Successfully encrypted $GPGFILE
-					copy_to_hup $GPGFILE
 				fi
 			;;
-			m|*) $MERGE_BIN $TMP_HUP_DECRYPT_FILE `gpg_decrypt $GPGFILE`
+			q)	exit 0
+			;;
+			m|*) $MERGE_BIN $TMP_HUP_DECRYPT_FILE $TMPFILE -merge $MERGEFILE
 			;;
 			esac
+		done
+		# Newer file is saved locally and to hup
+		if [ "$TMP_HUP_DECRYPT_FILE" -nt "$TMPFILE" ]
+		then
+			msgVerbose newer file is from hup
+			if gpg_encrypt $HUP_GPGFILE $TMP_HUP_DECRYPT_FILE
+			then
+				msgDebug 1 Successfully encrypted $HUP_GPGFILE
+				copy_to_hup $HUP_GPGFILE || msgOnFailedExitStatus
+				cp $HUP_GPGFILE $GPGFILE
+			fi
+		else
+			msgVerbose newer file is from localhost
+			if gpg_encrypt $GPGFILE $TMPFILE
+			then
+				msgDebug 1 Successfully encrypted $GPGFILE
+				copy_to_hup $GPGFILE || msgOnFailedExitStatus
+			fi
 		fi
+		exit 0
 	;;
 	search)
 		if [ "X" != "X$*" ]
@@ -429,8 +462,9 @@ case $1 in
 	;;
 esac
 
-exit 0
-if gpg_decrypt $GPGFILE
+# default mode is edit. Why is this here and not in the case flow control above? Because the case "search"
+# also uses this mode.
+if gpg_decrypt $GPGFILE $TMPFILE
 then
 	msgDebug 1 Successfully decrypted $GPGFILE
 	if [ "X$SEARCH_PATTERN" != "X" ]
