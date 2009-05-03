@@ -213,6 +213,12 @@ gpg_decrypt ()
 	msgDebug 1 writing cleartext file to: $TMPFILE
 	# last option _must_ be --decrypt. do not reorder options
 	gpg --homedir ${HOMEDIR} --yes --output "$TMPFILE" --decrypt $1
+	if [ -s $TMPFILE ]
+	then
+		return 0
+	else
+		return 1
+	fi
 }
 
 # function: gpg encrypts a file in $2, when available and writes it in $1
@@ -262,6 +268,8 @@ copy_from_hup ()
 	if [ $? = 0 ]
 	then
 		echo $HUP_TEMPFILE
+	else
+		msgVerboseError scp $SCP_OPTIONS $HUP_PASSWORD_FILE $HUP_TEMPFILE failed
 	fi
 }
 
@@ -391,6 +399,9 @@ case $1 in
 				msgDebug 1 \$SUCCESSFUL_DECRYPT = $SUCCESSFUL_DECRYPT
 				exit 2
 			fi
+		else
+			msgDebug 1 File is empty: \$HUP_GPGFILE
+			exit 13
 		fi
 		# check for differences after merge
 		until ( diff -q $TMP_HUP_DECRYPT_FILE $TMPFILE > /dev/null )
