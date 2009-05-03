@@ -41,7 +41,7 @@ USB_GNUPG_DIR=".gnupg/"
 # remote (hup) path to password file
 # check scp(1) man page for URL syntax
 SCP_OPTIONS="-Bqp"
-HUP_PASSWORD_FILE="10.9.9.2:/home/erik/${PASSWORD_FILE}.gpg"
+HUP_PASSWORD_FILE="10.9.9.2:${HOME}${PASSWORD_FILE}.gpg"
 
 ## Global vars
 # check for OS and their defaults
