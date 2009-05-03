@@ -430,6 +430,8 @@ case $1 in
 			;;
 			d) :
 			;;
+			n) ## FIXME ##
+			;;
 			s)	if gpg_encrypt $GPGFILE $TMPFILE
 				then
 					msgDebug 1 Successfully encrypted $GPGFILE
