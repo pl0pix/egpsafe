@@ -419,7 +419,7 @@ case $1 in
 			echo '[q] do nothing and quit application'
 			read -p'mlcnsdq [m]>' REPLY
 			case $REPLY in
-			l)	ls -l $TMP_HUP_DECRYPT_FILE $TMPFILE ;;
+			l)	ls -l $TMP_HUP_DECRYPT_FILE $TMPFILE $MERGEFILE;;
 			c)	if [ "$MERGEFILE" = "$TMP_HUP_DECRYPT_FILE" ]
 				then
 					MERGEFILE=$TMPFILE
