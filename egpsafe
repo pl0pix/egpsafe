@@ -367,7 +367,7 @@ case $1 in
 		msgDebug 1 \$HUP_GPGFILE = $HUP_GPGFILE
 		msgDebug 1 tmp files are created
 		# compare ctimes of both files.
-		if [ $HUP_GPGFILE -nt $GPGFILE ]
+		if [ "$HUP_GPGFILE" -nt "$GPGFILE" ]
 		then
 			MERGEFILE=$TMPFILE
 			msgVerbose 'Password file on Remote Host is newer'
