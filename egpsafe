@@ -417,7 +417,7 @@ case $1 in
 			echo '[s]ave local file and remove file from hup. Do not copy to hup,'
 			echo '[d]o nothing just continue; everything is fine'
 			echo '[q] do nothing and quit application'
-			read -p'mnosd [m]>' REPLY
+			read -p'mlcnsdq [m]>' REPLY
 			case $REPLY in
 			l)	ls -l $TMP_HUP_DECRYPT_FILE $TMPFILE ;;
 			c)	if [ "$MERGEFILE" = "$TMP_HUP_DECRYPT_FILE" ]
