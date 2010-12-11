@@ -3,7 +3,7 @@ egpsafe -- Eriks Gpg Password Safe
 
 Motivation
  The goal of this script is to store passwords in a file without any format
-and keep it as secure as possible. This means gpg encrypted. It should still
+and keep it as secure as possible. This means gpg encrypted. It must still
 work, if most other things on a host do not work anymore. This means: egpsafe
 should have least possible dependencies. That's why it has a command line 
 interface and no gui.
