@@ -104,6 +104,12 @@ GPGFILE=${PASSWORD_DIR}/${PASSWORD_FILE}${GPGFILE_EXTENSION}
 
 ## Functions
 
+#===  FUNCTION  ================================================================
+#          NAME:  usage
+#   DESCRIPTION:  prints usage
+#    PARAMETERS:  none
+#       RETURNS:  string to stdout
+#===============================================================================
 usage ()
 {
 	cat <<EOFUSAGE
@@ -138,16 +144,25 @@ Send bug reports to Erik Wenzel <ew@code.de>
 EOFUSAGE
 }
 
-# function:    echos a error message to /dev/stderr
-# parameter:   $@ = additional information
+#===  FUNCTION  ================================================================
+#          NAME:  msgError
+#   DESCRIPTION:  echos a error message to /dev/stderr
+#    PARAMETERS:  $@ = additional information
+#       RETURNS:  string to stderr
+#===============================================================================
 msgError ()
 {
 	echo $PROGRAM: "$@" >&2
 }
 
-# function:   for echoing a message on a non zero exit status of a process 
-#             to stderr. Exit code are 1 >= 255.
-# parameters: $1 = process name, $2 = exit status number
+
+#===  FUNCTION  ================================================================
+#          NAME:  msgOnFailedExitStatus
+#   DESCRIPTION:  echo a message on a non zero exit status of a process to 
+#                 stderr. Exit code are 1 >= 255.
+#    PARAMETERS:  $1 = process name, $2 = exit status number
+#       RETURNS:  string to stderr
+#===============================================================================
 msgOnFailedExitStatus ()
 {
 	if [ "$2" -ge 1 -a "$2" -le 255 ]
@@ -157,8 +172,12 @@ msgOnFailedExitStatus ()
 	fi
 }
 
-# function:   echos a debugging string to stderr if debug flag is enabled
-# parameters: $1 = value of debugging flag, $* = debugging string
+#===  FUNCTION  ================================================================
+#          NAME:  msgDebug
+#   DESCRIPTION:  echos a debugging string to stderr if debug flag is enabled
+#    PARAMETERS:  $1 = value of debugging flag, $* = debugging string
+#       RETURNS:  string to stderr
+#===============================================================================
 msgDebug ()
 {
 	debugString="$*"
@@ -166,9 +185,14 @@ msgDebug ()
 	[ $1 -le $DEBUG ] && echo "DEBUG${1}: ${debugString#* }" >&2
 }
 
-# function:   it prints a message only when verbose option is set
-#             'msgVerbose -n' suppresses trailing newline
-# parameters: text to print
+
+#===  FUNCTION  ================================================================
+#          NAME:  msgVerbose
+#   DESCRIPTION:  prints a message only when verbose option is set 
+#                 'msgVerbose -n' suppresses trailing newline
+#    PARAMETERS:  $1 optional "-n", $* string to print
+#       RETURNS:  string to stdout
+#===============================================================================
 msgVerbose ()
 {
         local echooption=""
@@ -186,8 +210,12 @@ msgVerbose ()
         fi
 }
 
-# function:    echos a error message on verbose flag
-# parameters:  $* additional information
+#===  FUNCTION  ================================================================
+#          NAME:  msgVerboseError
+#   DESCRIPTION:  echos a error message when verbose option is set
+#    PARAMETERS:  $* string to print
+#       RETURNS:  string to stderr
+#===============================================================================
 msgVerboseError ()
 {
 	if [ "X$option_verbose" = "Xyes" ]
@@ -196,8 +224,13 @@ msgVerboseError ()
 	fi
 }
 
-# function:     os independent mktemp creation
-#
+
+#===  FUNCTION  ================================================================
+#          NAME:  _mktemp
+#   DESCRIPTION:  os independent mktemp creation
+#    PARAMETERS:  none
+#       RETURNS:  absolute path and filename
+#===============================================================================
 _mktemp ()
 {
 	_uname=`uname`
@@ -220,16 +253,24 @@ _mktemp ()
 	echo $TEMPFILE
 }
 
-# function: do block opendiff until FileMerge exits
-# Args: arguments to opendiff
-# Returns exit value
+
+#===  FUNCTION  ================================================================
+#          NAME:  _opendiff
+#   DESCRIPTION:  do block opendiff until FileMerge exits
+#    PARAMETERS:  all parameters are passed to opendiff
+#       RETURNS:  exit code
+#===============================================================================
 _opendiff () {
 	echo `opendiff "$@"` > /dev/null
 }
 
-# function: gpg decrypts a file in $1
-# Arg: $1 = filename $2 = output $TMPFILE
-# Return value: exit code of last command
+
+#===  FUNCTION  ================================================================
+#          NAME:  gpg_decrypt
+#   DESCRIPTION:  gpg decrypts a file and writes it to a temporary file
+#    PARAMETERS:  $1 = file, $2 output file
+#       RETURNS:  exit code of gpg
+#===============================================================================
 gpg_decrypt ()
 {
 	local TMPFILE=""
@@ -249,8 +290,13 @@ gpg_decrypt ()
 	fi
 }
 
-# function: gpg encrypts a file in $2, when available and writes it in $1
-# Arg: $1 = output filename $2 input tmpfile (optional)
+#===  FUNCTION  ================================================================
+#          NAME:  gpg_encrypt
+#   DESCRIPTION:  gpg encrypts a file in $2, when available and writes it in $1
+#                 Key-IDs aren't passed as arguments but with a global variable.
+#    PARAMETERS:  $1 = output filename $2 input tmpfile (optional)
+#       RETURNS:  exit code of gpg
+#===============================================================================
 gpg_encrypt ()
 {
 	if [ "x$RECIPIENT_KEY_ID" = "x" ]
@@ -272,6 +318,13 @@ gpg_encrypt ()
 	fi
 }
 
+#===  FUNCTION  ================================================================
+#          NAME:  check_usb_device
+#   DESCRIPTION:  when usb is mounted at $mountpoint use pass file and key on
+#                 that device
+#    PARAMETERS:  $1 is an absolute path 
+#       RETURNS:  nothing
+#===============================================================================
 check_usb_device ()
 {
 	# check if usb memory is mounted. Then use gpg key on usb device.
@@ -288,7 +341,13 @@ check_usb_device ()
 	fi
 }
 
-# no arguments returns the path to encrypted password file
+#===  FUNCTION  ================================================================
+#          NAME:  copy_from_hup
+#   DESCRIPTION:  scp a remote file to a local temp file. scp parameter are
+#                 passed as global variables
+#    PARAMETERS:  none
+#       RETURNS:  path and filename of temp file
+#===============================================================================
 copy_from_hup ()
 {
 	local HUP_TEMPFILE=`_mktemp`
@@ -301,14 +360,25 @@ copy_from_hup ()
 	fi
 }
 
-# Arg: $1 = encrypted local file to be copied to hup
+#===  FUNCTION  ================================================================
+#          NAME:  copy_to_hup
+#   DESCRIPTION:  scp a local file to a remote host
+#    PARAMETERS:  $1 = local file to be copied to remote host
+#       RETURNS:  exit code
+#===============================================================================
 copy_to_hup ()
 {
 	scp $SCP_OPTIONS $1 $HUP_PASSWORD_FILE || msgOnFailedExitStatus
 	return 0
 }
 
-
+#===  FUNCTION  ================================================================
+#          NAME:  cleanup
+#   DESCRIPTION:  removes $TMPFILE and $HUP_TEMPFILE from filesystem. Uses wipe
+#                 if it is installed. Both files are passed as global variables.
+#    PARAMETERS:  none
+#       RETURNS:  noting
+#===============================================================================
 cleanup ()
 {
 	if `which wipe`
