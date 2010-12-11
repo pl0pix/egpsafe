@@ -113,7 +113,7 @@ GPGFILE=${PASSWORD_DIR}/${PASSWORD_FILE}${GPGFILE_EXTENSION}
 usage ()
 {
 	cat <<EOFUSAGE
-Usage: $PROGRAM [-hVv] edit|see|search [<keyword>]|merge
+Usage: $PROGRAM [-hVv] [edit|see|search [<keywords>]|merge]
 
 DESCRIPTION
 	stores your passwords in a gpg encrypted file.
