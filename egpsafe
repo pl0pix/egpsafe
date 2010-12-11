@@ -335,7 +335,7 @@ check_usb_device
 
 # Initializing files on the first run
 msgDebug 1 Using GPGFILE: $GPGFILE
-if [ ! -f $GPGFILE ]
+if [ ! -f $GPGFILE -o -z $GPGFILE ]
 then
 	touch $GPGFILE
 	TMP_CLEARTEXT_FILE=`_mktemp`
