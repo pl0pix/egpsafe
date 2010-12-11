@@ -9,18 +9,37 @@
 
 #===============================================================================
 #
-# Written by Ben Reser <ben@reser.org>
-# Shell script to decrypt a file to a temp file.  Edit it.
-# Re-encrypt the file and then wipe the temp file from the drive.
-# requires gpg and wipe.
-# * added secure way of generating a tmp file. -- erik@code.de
-# * added handling of an alternate place for gpg and password file
-#   for usb memory stick handling -- erik@code.de
-# * added darwin support -- erik@code.de
-# * added encryption for one or more recipients -- erik@code.de
-# * added four modes edit, see, search, merge -- erik@code.de
+#          FILE:  egpsafe
+# 
+#         USAGE:  egpsafe [-hVv] edit|see|search [<keyword>]|merge
+# 
+#   DESCRIPTION: stores your passwords in a gpg encrypted file. 
+#                The list of option may not complete see usage() for a complete
+#                list.
 #
-# END OF CHANGELOG
+#       OPTIONS:  -h this information
+#                 -V prints version end exits
+#                 -v enable verbose output
+#                 -D enable debug mode
+#                 
+#  REQUIREMENTS:  ---
+#          BUGS:  ---
+#         NOTES:  Originally written by Ben Reser <ben@reser.org> Shell script
+#         to decrypt a file to a temp file.  Edit it.  Re-encrypt the file and
+#         then wipe the temp file from the drive.  requires gpg and wipe.  
+#         * added secure way of generating a tmp file. -- erik@code.de 
+#         * added handling of an alternate place for gpg and password file for usb
+#           memory stick handling -- erik@code.de 
+#         * added darwin support -- erik@code.de 
+#         * added encryption for one or more recipients -- erik@code.de 
+#         * added four modes edit, see, search, merge -- erik@code.de
+#        AUTHOR: Erik Wenzel, <erik@code.de>
+#       COMPANY: 
+#       CREATED: 11.12.2010 22:01:05 CET
+#      REVISION: %%VERSION%%
+#===============================================================================
+
+set -o nounset                              # Treat unset variables as an error
 
 PROGRAM=`basename "$0"`
 VERSION="%%VERSION%%"
@@ -484,8 +503,9 @@ case $1 in
 	;;
 esac
 
-# default mode is edit. Why is this here and not in the case flow control above? Because the case "search"
-# also uses this mode.
+# default mode is edit. Why is this here and not in the case flow control
+# above? Because the case "search" also uses this mode.
+
 if gpg_decrypt $GPGFILE $TMPFILE
 then
 	msgDebug 1 Successfully decrypted $GPGFILE
