@@ -579,10 +579,11 @@ then
 	msgDebug 1 Successfully decrypted $GPGFILE
 	if [ "X$SEARCH_PATTERN" != "X" ]
 	then
-		$EDITOR +/"$SEARCH_PATTERN" $TMPFILE
-		exit 13
+                # cut off the mode from pattern
+		$EDITOR +/"${SEARCH_PATTERN#search }" $TMPFILE
+        else
+                $EDITOR $TMPFILE
 	fi
-	$EDITOR $TMPFILE
 
 	if gpg_encrypt $GPGFILE $TMPFILE
 	then
