@@ -602,5 +602,9 @@ else
 fi
 
 trap 'cleanup; exit 13' 1 2 3 15
+
+# Do not leave passwords in terminal buffer
+clear
+
 exit 0
 
