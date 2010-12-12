@@ -11,7 +11,7 @@
 #
 #          FILE:  egpsafe
 # 
-#         USAGE:  egpsafe [-hVv] edit|see|search [<keyword>]|merge
+#         USAGE:  egpsafe [-hVv] [edit|see|search [<keyword>]|merge]
 # 
 #   DESCRIPTION: stores your passwords in a gpg encrypted file. 
 #                The list of option may not complete see usage() for a complete
@@ -528,7 +528,7 @@ case $1 in
 			;;
 			d) :
 			;;
-			n) ## FIXME ##
+			n) # :TODO:12.12.2010 01:03:18 CET:: write newer file to hup
 			;;
 			s)	if gpg_encrypt $GPGFILE $TMPFILE
 				then

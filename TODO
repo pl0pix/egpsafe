@@ -1,0 +1,4 @@
+TODO
+
+• write 'upload [n]ewer file to hup,' in merge mode
+• write makefile for generating an %%VERSION%% string in egpsafe
