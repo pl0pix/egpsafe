@@ -114,7 +114,9 @@ usage ()
 Usage: $PROGRAM [-hVv] [edit|see|search [<keywords>]|merge]
 
 DESCRIPTION
-	stores your passwords in a gpg encrypted file.
+	stores your passwords in a gpg encrypted file. Unencrypted temp files are
+        deleted even when $program is interrupted. It tries to use wipe to clean
+        a file from a harddrive.
 
 OPTIONS
 	-h this information
