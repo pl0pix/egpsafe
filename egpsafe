@@ -39,8 +39,6 @@
 #      REVISION: %%VERSION%%
 #===============================================================================
 
-set -o nounset                              # Treat unset variables as an error
-
 PROGRAM=`basename "$0"`
 VERSION="%%VERSION%%"
 DEBUG=${DEBUG:=0}
