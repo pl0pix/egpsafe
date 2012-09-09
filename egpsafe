@@ -53,10 +53,12 @@ PATH="/bin:/usr/bin"
 RECIPIENT_KEY_ID=0x720DF241
 
 # password base filename it gets the .gpg extension on encryption
+# Do not use the default file name to prevent an egpsafe specific attack.
 PASSWORD_FILE=".password"
 
 # specify the point where the usb stick is mounted
 MOUNTPOINT=/media/sda1
+
 # specify path to encrypted password file (relative to MOUNTPOINT) so: no
 # leading /
 USB_PASSWORD_DIR=""
@@ -309,7 +311,7 @@ gpg_encrypt ()
         RECIPIENTS_OPTS="${RECIPIENTS_OPTS} -r $RECIPIENT_KEY_ID"
         msgDebug 1 Found recipient key
     fi
-    if [  x$2 = "x" ]
+    if [ x$2 = "x" ]
     then
         gpg --homedir ${HOMEDIR} --yes --trust-model always $RECIPIENTS_OPTS --encrypt $1
     else
@@ -436,12 +438,14 @@ msgDebug 1 Using GPGFILE: $GPGFILE
 if [ ! -f $GPGFILE -o -z $GPGFILE ]
 then
     touch $GPGFILE
+    chmod 600 $GPGFILE
     TMP_CLEARTEXT_FILE=`_mktemp`
     msgVerbose Created candidate cleartext password file. Save it and it will be encrypted.
     $EDITOR $TMP_CLEARTEXT_FILE
-    gpg_encrypt $TMP_CLEARTEXT_FILE && msgVerbose $GPGFILE created.
+    gpg_encrypt $GPGFILE $TMP_CLEARTEXT_FILE && msgVerbose $GPGFILE created.
     msgDebug 1 No encrypted file found: Created $GPGFILE
     rm -f $TMP_CLEARTEXT_FILE
+    exit 0
 fi
 
 msgDebug 1 \$1 has value: $1
