@@ -69,7 +69,7 @@ USB_GNUPG_DIR=".gnupg/"
 # remote (hup) path to password file
 # check scp(1) man page for URL syntax
 SCP_OPTIONS="-Bqp"
-HUP_PASSWORD_FILE="10.9.9.2:${HOME}${PASSWORD_FILE}.gpg"
+HUP_PASSWORD_FILE="10.9.9.2:${HOME}/${PASSWORD_FILE}.gpg"
 
 ## Global vars
 # check for OS and their defaults
@@ -354,11 +354,10 @@ copy_from_hup ()
 {
     local HUP_TEMPFILE=`_mktemp`
     scp $SCP_OPTIONS $HUP_PASSWORD_FILE $HUP_TEMPFILE
-    if [ $? = 0 ]
+    if [ $? != 0 ]
     then
-        echo $HUP_TEMPFILE
-    else
         msgVerboseError scp $SCP_OPTIONS $HUP_PASSWORD_FILE $HUP_TEMPFILE failed
+        msgVerboseError or $HUP_PASSWORD_FILE is not available on remote host
     fi
 }
 
@@ -370,8 +369,15 @@ copy_from_hup ()
 #===============================================================================
 copy_to_hup ()
 {
-    scp $SCP_OPTIONS $1 $HUP_PASSWORD_FILE || msgOnFailedExitStatus
-    return 0
+    if [ $DEBUG -gt 0 ]
+    then
+        SCP_OPTIONS="Bp"
+    fi
+    scp $SCP_OPTIONS "$1" $HUP_PASSWORD_FILE
+    if [ $? != 0 ]
+    then
+        msgVerboseError scp $SCP_OPTIONS $1 $HUP_PASSWORD_FILE failed
+    fi
 }
 
 #===  FUNCTION  ================================================================
@@ -479,11 +485,12 @@ case $1 in
             msgVerbose 'Password file on local Host is newer'
             echo merged changes are written to file on hup
         fi
-        # if not empty
+        # if local path to $HUP_GPGFILE is available
         if [ X$HUP_GPGFILE != "X" ]
         then
             gpg_decrypt $HUP_GPGFILE $TMP_HUP_DECRYPT_FILE && SUCCESSFUL_DECRYPT=$((SUCCESSFUL_DECRYPT + 1))
             gpg_decrypt $GPGFILE $TMPFILE && SUCCESSFUL_DECRYPT=$((SUCCESSFUL_DECRYPT + 1))
+            # if both files can be decrypted
             if [ $SUCCESSFUL_DECRYPT -eq 2 ]
             then
                 msgDebug 1 \$GPGFILE = $GPGFILE
@@ -502,8 +509,17 @@ case $1 in
                 exit 2
             fi
         else
-            msgDebug 1 File is empty: \$HUP_GPGFILE
-            exit 13
+            msgDebug 1 Local path to file is empty: \$HUP_GPGFILE
+            msgDebug 1 Possible reason: scp failed or file on remote host is not available or empty
+            read -p 'Hup file is not available. Is this an initial run? Should I copy local file to hup? [Y/n]' REPLY
+            if [ "$REPLY" = 'n' ] || [ "$REPLY" = 'N' ]
+            then
+                exit 13
+            else
+                cat $TMPFILE > $TMP_HUP_DECRYPT_FILE
+                # set timestamps to $TMP_HUP_DECRYPT_FILE
+                touch -r $TMPFILE $TMP_HUP_DECRYPT_FILE
+            fi
         fi
         # check for differences after merge
         until ( diff -q $TMP_HUP_DECRYPT_FILE $TMPFILE > /dev/null )
@@ -532,7 +548,7 @@ case $1 in
                 ;;
             d) :
                 ;;
-            n) # :TODO:12.12.2010 01:03:18 CET:: write newer file to hup
+            n) :
                 ;;
             s)  if gpg_encrypt $GPGFILE $TMPFILE
                 then
@@ -552,7 +568,7 @@ case $1 in
             if gpg_encrypt $HUP_GPGFILE $TMP_HUP_DECRYPT_FILE
             then
                 msgDebug 1 Successfully encrypted $HUP_GPGFILE
-                copy_to_hup $HUP_GPGFILE || msgOnFailedExitStatus
+                copy_to_hup $HUP_GPGFILE
                 cp $HUP_GPGFILE $GPGFILE
             fi
         else
@@ -560,7 +576,7 @@ case $1 in
             if gpg_encrypt $GPGFILE $TMPFILE
             then
                 msgDebug 1 Successfully encrypted $GPGFILE
-                copy_to_hup $GPGFILE || msgOnFailedExitStatus
+                copy_to_hup $GPGFILE
             fi
         fi
         exit 0
