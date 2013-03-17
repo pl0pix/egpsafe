@@ -54,7 +54,8 @@ RECIPIENT_KEY_ID=0x720DF241
 
 # password base filename it gets the .gpg extension on encryption
 # Do not use the default file name to prevent an egpsafe specific attack.
-PASSWORD_FILE=".password"
+PASSWORD_FILE=".egp"
+#PASSWORD_FILE=".password"
 
 # specify the point where the usb stick is mounted
 MOUNTPOINT=/media/sda1
@@ -69,7 +70,7 @@ USB_GNUPG_DIR=".gnupg/"
 # remote (hup) path to password file
 # check scp(1) man page for URL syntax
 SCP_OPTIONS="-Bqp"
-HUP_PASSWORD_FILE="10.9.9.2:${HOME}/${PASSWORD_FILE}.gpg"
+HUP_PASSWORD_FILE="10.8.8.2:/home/erik/${PASSWORD_FILE}.gpg"
 
 ## Global vars
 # check for OS and their defaults
@@ -358,7 +359,10 @@ copy_from_hup ()
     then
         msgVerboseError scp $SCP_OPTIONS $HUP_PASSWORD_FILE $HUP_TEMPFILE failed
         msgVerboseError or $HUP_PASSWORD_FILE is not available on remote host
+        msgVerboseError or try without -B as an option to scp
     fi
+    msgDebug 1 file sucessfully copied from hup
+    echo $HUP_TEMPFILE
 }
 
 #===  FUNCTION  ================================================================
@@ -371,7 +375,7 @@ copy_to_hup ()
 {
     if [ $DEBUG -gt 0 ]
     then
-        SCP_OPTIONS="Bp"
+        SCP_OPTIONS="-Bp"
     fi
     scp $SCP_OPTIONS "$1" $HUP_PASSWORD_FILE
     if [ $? != 0 ]
@@ -478,17 +482,19 @@ case $1 in
         if [ "$HUP_GPGFILE" -nt "$GPGFILE" ]
         then
             MERGEFILE=$TMPFILE
-            msgVerbose 'Password file on Remote Host is newer'
+            msgVerbose 'Password file on remote host is newer'
             echo merged changes are written to file on localhost
         else
             MERGEFILE=$TMP_HUP_DECRYPT_FILE
-            msgVerbose 'Password file on local Host is newer'
+            msgVerbose 'Password file on local host is newer'
             echo merged changes are written to file on hup
         fi
         # if local path to $HUP_GPGFILE is available
         if [ X$HUP_GPGFILE != "X" ]
         then
+			msgDebug 1 decrypting \$HUP_GPGFILE = $HUP_GPGFILE
             gpg_decrypt $HUP_GPGFILE $TMP_HUP_DECRYPT_FILE && SUCCESSFUL_DECRYPT=$((SUCCESSFUL_DECRYPT + 1))
+			msgDebug 1 decrypting \$GPGFILE = $GPGFILE
             gpg_decrypt $GPGFILE $TMPFILE && SUCCESSFUL_DECRYPT=$((SUCCESSFUL_DECRYPT + 1))
             # if both files can be decrypted
             if [ $SUCCESSFUL_DECRYPT -eq 2 ]
