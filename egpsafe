@@ -646,7 +646,10 @@ fi
 trap 'cleanup; exit 13' 1 2 3 15
 
 # Do not leave passwords in terminal buffer
-clear
+if [ $DEBUG == 0 ]
+then
+	clear
+fi
 
 exit 0
 
