@@ -93,7 +93,7 @@ case "$_uname" in
         #MERGE_BIN="/Developer/Applications/Utilities/FileMerge.app/Contents/MacOS/FileMerge"
         MERGE_BIN="_opendiff"
         ;;
-        *)
+    *)
         # If you discover new shells that can't handle dev tty etc. as
         # below, then tailor it here.
         echo Platform not supported >&2
@@ -508,9 +508,9 @@ case $1 in
         # if local path to $HUP_GPGFILE is available
         if [ X$HUP_GPGFILE != "X" ]
         then
-			msgDebug 1 decrypting \$HUP_GPGFILE = $HUP_GPGFILE
+            msgDebug 1 decrypting \$HUP_GPGFILE = $HUP_GPGFILE
             gpg_decrypt $HUP_GPGFILE $TMP_HUP_DECRYPT_FILE && SUCCESSFUL_DECRYPT=$((SUCCESSFUL_DECRYPT + 1))
-			msgDebug 1 decrypting \$GPGFILE = $GPGFILE
+            msgDebug 1 decrypting \$GPGFILE = $GPGFILE
             gpg_decrypt $GPGFILE $TMPFILE && SUCCESSFUL_DECRYPT=$((SUCCESSFUL_DECRYPT + 1))
             # if both files can be decrypted
             if [ $SUCCESSFUL_DECRYPT -eq 2 ]
