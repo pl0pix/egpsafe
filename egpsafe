@@ -46,6 +46,9 @@ DEBUG=${DEBUG:=0}
 # Shorten PATH to standard pathes for invoking user. This is for security.
 PATH="/bin:/usr/bin"
 
+# your local key. This is optional. Specify if you have more than one secret keys
+DEFAULT_KEY_ID=0xFE6CBC8F
+
 # specify recipients who are able to decrypt your password file This is useful
 # for people with a private gpg key and different gpg key for business.
 # The recipient key must already imported in used keychain. Do not enter a
@@ -304,13 +307,26 @@ gpg_encrypt ()
 {
     if [ "x$RECIPIENT_KEY_ID" = "x" ]
     then
-        RECIPIENTS_OPTS=" --default-recipient-self "
-        msgDebug 1 No receipient key found, encrypting to my self only
+	    if [ ! "x$DEFAULT_KEY_ID" = "x" ]
+		then
+			RECIPIENTS_OPTS="-r $DEFAULT_KEY_ID "
+		else
+			RECIPIENTS_OPTS=" --default-recipient-self "
+			msgDebug 1 No receipient key found, encrypting to my self only
+		fi
     else
-        # get default recipient on currently used keyring
-        RECIPIENTS_OPTS="-r 0x`gpg --list-key | head -n6 | grep "^pub" | cut -d" " -f4 | cut -d/ -f2`"
-        RECIPIENTS_OPTS="${RECIPIENTS_OPTS} -r $RECIPIENT_KEY_ID"
         msgDebug 1 Found recipient key
+	    if [ ! "x$DEFAULT_KEY_ID" = "x" ]
+		then
+			RECIPIENTS_OPTS="-r $DEFAULT_KEY_ID "
+			RECIPIENTS_OPTS="${RECIPIENTS_OPTS} -r $RECIPIENT_KEY_ID"
+			msgDebug 1 default key used
+		else
+			# get default recipient on currently used keyring
+			RECIPIENTS_OPTS="-r 0x`gpg --list-key | head -n6 | grep "^pub" | cut -d" " -f4 | cut -d/ -f2`"
+			RECIPIENTS_OPTS="${RECIPIENTS_OPTS} -r $RECIPIENT_KEY_ID"
+			msgDebug 1 Found first key out of used keyring
+		fi
     fi
     if [ x$2 = "x" ]
     then
